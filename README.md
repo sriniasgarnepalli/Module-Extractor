@@ -1,98 +1,115 @@
-# 📘 AI Documentation Extractor - Technical Documentation
-
-## 📐 Technical Architecture Description
-
-### Overview
-
-This Streamlit-based application allows users to input one or more documentation URLs, crawl those help sites, extract structured textual content, and use GPT-4 to analyze and identify modules, submodules, and detailed descriptions—all fully automated.
-
-### Architecture Components
-
-#### 1. UI Layer (Streamlit App)
-
-* Accepts one or more documentation URLs.
-* Displays real-time crawl and extraction status per URL.
-* Shows structured module-submodule output in JSON.
-
-#### 2. Crawler Module (`app/crawler.py`)
-
-* Recursively crawls documentation pages starting from the base URL.
-* Extracts all relevant internal links.
-* Filters out irrelevant pages (e.g., contact, terms, etc.).
-
-#### 3. Content Extractor (`app/extractor.py`)
-
-* Parses HTML with BeautifulSoup.
-* Removes headers, footers, navigation bars, scripts, and styles.
-* Organizes content into a dictionary of:
-
-  ```
-  {
-    Module Title (h1): [
-      {
-        title: Subsection Title (h2),
-        content: [paragraphs, list items]
-      },
-      ...
-    ]
-  }
-  ```
-
-#### 4. Analyzer (`app/analyzer.py`)
-
-* Loads the `.env`-based OpenAI API key.
-* Sends the flattened and concatenated text to OpenAI's GPT model.
-* Asks GPT to infer:
-
-  * Modules
-  * Submodules under each
-  * Accurate, structured descriptions
-* Handles parsing of GPT JSON output and error reporting.
-
-#### 5. Output Layer
-
-* Renders result as a human-readable, expandable JSON object in Streamlit UI.
-* Each URL's data is processed independently and shown sequentially.
+# AI-Powered Documentation Extractor – Technical Documentation
 
 ---
 
-## 🧠 Notes on Approach
+## 📌 Technical Architecture Description
 
-### Key Design Goals
+### 🏗️ Overall Design
 
-* **Simplicity**: Provide a single unified text input for URLs.
-* **Transparency**: Show progress per URL (crawl, extract, analyze).
-* **Scalability**: Each URL is processed independently for future parallelization.
-* **AI-Powered Insight**: Use OpenAI models for intelligent structure inference.
+This Streamlit application extracts structured information from documentation websites. It follows a modular architecture comprising four primary components:
+
+1. **User Interface (Streamlit)**
+
+   * Accepts one or more URLs.
+   * Displays progress and outputs structured JSON results.
+
+2. **Crawler Module (`app/crawler.py`)**
+
+   * Recursively crawls all valid and relevant pages under the provided URL domain.
+   * Handles edge cases like redirections, broken links, and duplicate visits.
+
+3. **Extractor Module (`app/extractor.py`)**
+
+   * Uses `BeautifulSoup` to extract main content from HTML, ignoring navigation, footer, ads, etc.
+   * Parses headers (`<h1>`, `<h2>`), paragraphs (`<p>`), and lists (`<ul>`) into a structured format.
+
+4. **Analyzer Module (`app/analyzer.py`)**
+
+   * Sends the cleaned text content to the OpenAI GPT model.
+   * Infers module/submodule hierarchy and generates meaningful descriptions.
+   * Returns structured JSON in the required output format.
 
 ---
 
-## 🧩 Assumptions
+## ⚙️ Application Flow
 
-1. **Documentation Format**:
+```text
+User Input (Streamlit UI) ──▶ Crawl URLs ──▶ Extract Content ──▶ GPT Inference ──▶ Display Structured JSON
+```
 
-   * Pages follow semantic HTML structures using `<h1>`, `<h2>`, `<p>`, `<ul>`.
-   * Important content is in `<h1>` → `<h2>` → `<p>/<ul>` hierarchy.
+---
 
-2. **Module & Submodule Inference**:
+## 💡 Notes on Approach
 
-   * `h1` is treated as a **module title**.
-   * `h2` within a module is a **submodule**.
-   * Paragraphs and list content under `h2` describe submodules.
+* **Content Extraction**:
 
-3. **Rate/Quota Assumptions**:
+  * Focuses on documentation-oriented tags (`<h1>`, `<h2>`, `<p>`, `<ul>`).
+  * Filters out unrelated elements such as navigation bars, footers, and scripts.
 
-   * User has access to `gpt-4o` or `gpt-4` with sufficient token limits.
-   * Token management will be handled manually by reducing context size if needed.
+* **Hierarchy Inference**:
+
+  * Top-level `<h1>` elements are considered modules.
+  * Nested `<h2>` tags and related content are grouped as submodules.
+
+* **GPT-4o Integration**:
+
+  * GPT is used to convert semi-structured HTML content into structured, human-readable JSON.
+  * Input is chunked dynamically to prevent token overflow.
+
+* **Performance**:
+
+  * Pages are crawled sequentially, but processing each URL’s analysis begins after its crawl is complete (can be parallelized).
+  * Only meaningful content is passed to the model to reduce token usage.
+
+---
+
+## ✅ Assumptions
+
+1. Documentation websites are structured using semantic HTML tags.
+2. Major documentation sections use `<h1>` for modules and `<h2>` for submodules.
+3. OpenAI GPT model has access and sufficient quota.
+4. All URLs share a consistent documentation structure within a domain.
+5. Each help URL is independently valid and relevant.
 
 ---
 
 ## ⚠️ Edge Case Handling
 
-| Scenario                                  | Handling                                                                              |
-| ----------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Redirects or broken links**             | Try/Except blocks during page requests with user warnings in UI.                      |          
-| **Non-standard HTML structure**           | Fallback skips unsupported tags, still attempts text extraction.                      |
-| **Multiple URLs with uneven load**        | URLs processed independently; errors in one don't block others.                       |
-| **API Key errors or model access issues** | Displayed as GPT errors with actionable feedback (quota, access).                     |
-| **Invalid or unsupported URL**            | Validation and exception handling warn the user cleanly.                              |
+* **Token Limitations**:
+
+  * Input token limits are monitored. If exceeded, content is truncated or split.
+  * Planned improvement: token estimation logic + chunked async processing.
+
+* **Crawling Depth**:
+
+  * Avoids infinite loops with visited link tracking.
+  * Only processes URLs within the domain root.
+
+* **Invalid/Unsupported URLs**:
+
+  * Broken or redirected links are logged and skipped.
+
+* **Non-HTML Pages**:
+
+  * Pages with unsupported MIME types (PDFs, images) are ignored.
+
+---
+
+## 🧪 Testing
+
+Tested against:
+
+1. [https://support.neo.space/hc/en-us](https://support.neo.space/hc/en-us)
+2. [https://wordpress.org/documentation/](https://wordpress.org/documentation/)
+3. [https://help.zluri.com/](https://help.zluri.com/)
+4. [https://www.chargebee.com/docs/2.0/](https://www.chargebee.com/docs/2.0/)
+
+All tests successfully retrieved structured module/submodule hierarchies with GPT-generated descriptions.
+
+---
+
+## 📦 Deployment Notes
+
+* Uses Streamlit for UI: `streamlit run app.py`
+* Requires `.env` file with `OPENAI_API_KEY` set.
+* Future improvement: Add FastAPI endpoint to serve as an API. Use Docker for easier deployment.
